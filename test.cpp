@@ -489,6 +489,46 @@ static_assert(!std::is_nothrow_constructible<std::string, ssbi>{}, "");
 #endif
 static_assert(std::is_nothrow_constructible<bool, ssbi>{}, "");
 
+using ui = strong::type<int, struct ui_, strong::unique>;
+static_assert(std::is_nothrow_constructible<ui, int>{},"");
+static_assert(!std::is_copy_constructible<ui>{},"");
+static_assert(std::is_nothrow_move_constructible<ui>{},"");
+static_assert(!std::is_copy_assignable<ui>{},"");
+static_assert(std::is_nothrow_move_assignable<ui>{},"");
+
+using us = strong::type<std::string, struct us_, strong::unique>;
+static_assert(std::is_constructible<us, const char*>{},"");
+static_assert(!std::is_nothrow_constructible<us, const char*>{},"");
+static_assert(!std::is_copy_constructible<us>{},"");
+static_assert(std::is_nothrow_move_constructible<us>{},"");
+static_assert(!std::is_copy_assignable<us>{},"");
+static_assert(std::is_nothrow_move_assignable<us>{},"");
+
+struct seqv : strong::type<std::string, seqv, strong::equality_with<const char*,us>>
+{};
+
+static_assert(!is_equal_comparable<seqv>{},"");
+static_assert(is_equal_comparable<seqv, const char*>{},"");
+static_assert(is_equal_comparable<const char*, seqv>{},"");
+static_assert(is_equal_comparable<seqv, us>{},"");
+static_assert(is_equal_comparable<us, seqv>{},"");
+static_assert(!is_equal_comparable<seqv, std::string>{},"");
+static_assert(!is_equal_comparable<std::string, seqv>{},"");
+
+struct iov : strong::type<int, iov, strong::ordered_with<int>>
+{
+  using strong::type<int, iov, strong::ordered_with<int>>::type;
+};
+
+static_assert(std::is_nothrow_constructible<iov, int>{},"");
+static_assert(std::is_nothrow_copy_constructible<iov>{},"");
+static_assert(std::is_nothrow_move_constructible<iov>{},"");
+static_assert(std::is_nothrow_copy_assignable<iov>{},"");
+static_assert(std::is_nothrow_move_assignable<iov>{},"");
+static_assert(is_less_than_comparable<iov, int>{},"");
+static_assert(is_less_than_comparable<int, iov>{},"");
+static_assert(!is_less_than_comparable<iov, iov>{},"");
+
 TEST_CASE("Construction from a value type lvalue copies it")
 {
   auto orig = std::make_shared<int>(3);
@@ -1088,4 +1128,30 @@ TEST_CASE("conversions")
   std::string svalide{valide};
   REQUIRE(svalidi == "value");
   REQUIRE(svalide == "value");
+}
+
+TEST_CASE("ordered_with")
+{
+  const iov i1{1};
+
+  REQUIRE(i1 < 2);
+  REQUIRE(0 < i1);
+  REQUIRE_FALSE(i1 < 1);
+  REQUIRE_FALSE(1 < i1);
+  REQUIRE(i1 <= 1);
+  REQUIRE(i1 <= 2);
+  REQUIRE_FALSE(i1 <= 0);
+  REQUIRE(1 <= i1);
+  REQUIRE(0 <= i1);
+  REQUIRE_FALSE(2<= i1);
+  REQUIRE(i1 >= 1);
+  REQUIRE(i1 >= 0);
+  REQUIRE_FALSE(i1 >= 2);
+  REQUIRE(1 >= i1);
+  REQUIRE(2 >= i1);
+  REQUIRE_FALSE(0 >= i1);
+  REQUIRE(i1 > 0);
+  REQUIRE_FALSE(i1 > 1);
+  REQUIRE(2 > i1);
+  REQUIRE_FALSE(1 > i1);
 }
