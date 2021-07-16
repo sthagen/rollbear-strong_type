@@ -26,7 +26,7 @@
 #define STRONG_NODISCARD
 #endif
 
-#if defined(_MSC_VER) && __MSC_VER < 1922
+#if defined(_MSC_VER) && !defined(__clang__) && __MSC_VER < 1922
 #define STRONG_CONSTEXPR
 #else
 #define STRONG_CONSTEXPR constexpr
@@ -1305,7 +1305,7 @@ public:
   noexcept(noexcept(std::declval<T&>()[impl::access(i)]))
   -> decltype(std::declval<T&>()[impl::access(i)])
   {
-    auto& self = static_cast<const type&>(*this);
+    auto& self = static_cast<type&>(*this);
     return value_of(self)[impl::access(i)];
   }
 
