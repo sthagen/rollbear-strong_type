@@ -1,5 +1,31 @@
+v4 2021-08-16
+
+        * strong::affine_point<D> can now be defaulted as
+          strong::affine_point<>, in which case a difference type will be
+          generated using the same tag as the strong affine point type.
+
+        * operator% is now conditionally supported for arithmetic types,
+          provided that the underlying type supports the operation.
+
+        * operator% is also conditionally supported for difference types,
+          difference % difference => underlying type, and
+          difference % underlying type => difference.
+
+        * strong::difference is now strong::equality comparable in addition
+          to being strong::ordered
+
+v3 2021-08-02
+
+        * increment/decrement operators are now hidden friends
+
+        * swap() is now constexpr. Thanks Björn Schäpers @HazardyKnusperkeks
+
         * operator() is now noexcept if the underlying type has a
           noexcept operator (). Thanks Björn Schäpers @HazardyKnusperkeks
+
+        * Fixed bug where clang++ on Windows wrongly used MSVC work-arounds
+
+        * Fixed bug where non-const operator[] returned const&
 
         * Use github-actions for CI
 

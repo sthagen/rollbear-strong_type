@@ -102,10 +102,10 @@ public:
   : val(std::forward<U>(u)...)
   {}
 
-  friend void swap(type& a, type& b) noexcept(
-                                        std::is_nothrow_move_constructible<type>::value &&
-                                        std::is_nothrow_move_assignable<type>::value
-                                      )
+  friend STRONG_CONSTEXPR void swap(type& a, type& b) noexcept(
+                                                        std::is_nothrow_move_constructible<type>::value &&
+                                                        std::is_nothrow_move_assignable<type>::value
+                                                      )
   {
     using std::swap;
     swap(a.val, b.val);
@@ -575,22 +575,23 @@ struct incrementable
   class modifier
   {
   public:
+    friend
     STRONG_CONSTEXPR
     T&
-    operator++()
+    operator++(T& t)
     noexcept(noexcept(++std::declval<T&>().value_of()))
     {
-      auto &self = static_cast<T&>(*this);
-      ++value_of(self);
-      return self;
+      ++value_of(t);
+      return t;
     }
 
+    friend
     STRONG_CONSTEXPR
     T
-    operator++(int)
+    operator++(T& t, int)
     {
-      auto copy = static_cast<T&>(*this);
-      ++*this;
+      auto copy = t;
+      ++t;
       return copy;
     }
   };
@@ -602,22 +603,23 @@ struct decrementable
   class modifier
   {
   public:
+    friend
     STRONG_CONSTEXPR
     T&
-    operator--()
+    operator--(T& t)
     noexcept(noexcept(--std::declval<T&>().value_of()))
     {
-      auto &self = static_cast<T&>(*this);
-      --value_of(self);
-      return self;
+      --value_of(t);
+      return t;
     }
 
+    friend
     STRONG_CONSTEXPR
     T
-    operator--(int)
+    operator--(T& t, int)
     {
-      auto copy = static_cast<T&>(*this);
-      --*this;
+      auto copy = t;
+      --t;
       return copy;
     }
   };
@@ -663,6 +665,7 @@ struct difference
 template <typename T, typename Tag, typename ... M>
 class difference::modifier<::strong::type<T, Tag, M...>>
 : public ordered::modifier<::strong::type<T, Tag, M...>>
+, public equality::modifier<::strong::type<T, Tag, M...>>
 {
   using type = ::strong::type<T, Tag, M...>;
 public:
@@ -699,6 +702,16 @@ public:
     noexcept(noexcept(value_of(lh) /= rh))
   {
     value_of(lh) /= rh;
+    return lh;
+  }
+
+  template <typename TT = T, typename = decltype(std::declval<TT&>()%= std::declval<const TT&>())>
+  friend
+  STRONG_CONSTEXPR
+  type& operator%=(type& lh, const T& rh)
+    noexcept(noexcept(value_of(lh) %= rh))
+  {
+    value_of(lh)%= rh;
     return lh;
   }
 
@@ -748,9 +761,28 @@ public:
   {
     return value_of(lh) / value_of(rh);
   }
+
+  template <typename TT = T, typename = decltype(std::declval<TT&>() %= std::declval<const TT&>())>
+  friend
+  STRONG_CONSTEXPR
+  type operator%(type lh, const T& rh)
+    noexcept(noexcept(lh%= rh))
+  {
+      lh %= rh;
+      return lh;
+  }
+
+  template <typename TT = T, typename = decltype(std::declval<TT>() % std::declval<TT>())>
+  friend
+  STRONG_CONSTEXPR
+  T operator%(type lh, type rh)
+    noexcept(noexcept(value_of(lh) % value_of(rh)))
+  {
+      return value_of(lh) % value_of(rh);
+  }
 };
 
-template <typename D>
+template <typename D = void>
 struct affine_point
 {
   template <typename T>
@@ -777,18 +809,19 @@ class affine_point<D>::modifier<::strong::type<T, Tag, M...>>
 {
   using type = ::strong::type<T, Tag, M...>;
   static_assert(impl::subtractable<T>::value, "it must be possible to subtract instances of your underlying type");
-  using diff_type = decltype(std::declval<const T&>() - std::declval<const T&>());
-  static_assert(std::is_constructible<D, diff_type>::value,"");
+  using base_diff_type = decltype(std::declval<const T&>() - std::declval<const T&>());
 public:
+  using difference = std::conditional_t<std::is_same<D, void>{}, strong::type<base_diff_type, Tag, strong::difference>, D>;
+  static_assert(std::is_constructible<difference, base_diff_type>::value, "");
   STRONG_NODISCARD
   friend
   STRONG_CONSTEXPR
-  D
+  difference
   operator-(
     const type& lh,
     const type& rh)
   {
-    return D(value_of(lh) - value_of(rh));
+    return difference(value_of(lh) - value_of(rh));
   }
 
   friend
@@ -796,7 +829,7 @@ public:
   type&
   operator+=(
     type& lh,
-    const D& d)
+    const difference& d)
   noexcept(noexcept(value_of(lh) += impl::access(d)))
   {
     value_of(lh) += impl::access(d);
@@ -808,7 +841,7 @@ public:
   type&
   operator-=(
     type& lh,
-    const D& d)
+    const difference& d)
   noexcept(noexcept(value_of(lh) -= impl::access(d)))
   {
     value_of(lh) -= impl::access(d);
@@ -821,7 +854,7 @@ public:
   type
   operator+(
     type lh,
-    const D& d)
+    const difference& d)
   {
     return lh += d;
   }
@@ -831,7 +864,7 @@ public:
   STRONG_CONSTEXPR
   type
   operator+(
-    const D& d,
+    const difference& d,
     type rh)
   {
     return rh+= d;
@@ -843,11 +876,12 @@ public:
   type
   operator-(
     type lh,
-    const D& d)
+    const difference& d)
   {
     return lh -= d;
   }
 };
+
 
 struct pointer
 {
@@ -995,6 +1029,19 @@ struct arithmetic
       return lh;
     }
 
+    template <typename TT = T, typename = decltype(value_of(std::declval<TT>()) % value_of(std::declval<TT>()))>
+    friend
+    STRONG_CONSTEXPR
+    T&
+    operator%=(
+      T &lh,
+      const T &rh)
+    noexcept(noexcept(value_of(lh) %= value_of(rh)))
+    {
+      value_of(lh) %= value_of(rh);
+      return lh;
+    }
+
     STRONG_NODISCARD
     friend
     STRONG_CONSTEXPR
@@ -1042,6 +1089,20 @@ struct arithmetic
       lh /= rh;
       return lh;
     }
+
+    template <typename TT = T, typename = decltype(value_of(std::declval<TT>()) % value_of(std::declval<TT>()))>
+    STRONG_NODISCARD
+    friend
+    STRONG_CONSTEXPR
+    T
+    operator%(
+      T lh,
+      const T &rh)
+    {
+      lh %= rh;
+      return lh;
+    }
+
   };
 };
 

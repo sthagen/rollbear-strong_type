@@ -48,6 +48,10 @@ using multiply = decltype(std::declval<const T&>() * std::declval<const U&>());
 template <typename T, typename U>
 using divide = decltype(std::declval<const T&>() / std::declval<const U&>());
 
+template <typename T, typename U>
+using modulo = decltype(std::declval<const T&>() % std::declval<const U&>());
+
+
 template <typename T>
 using begin_type = decltype(std::declval<T&>().begin());
 
@@ -118,6 +122,9 @@ template <typename T, typename U = T>
 using is_divisible = is_detected<divide, T, U>;
 
 template <typename T, typename U = T>
+using is_modulo_able = is_detected<modulo, T, U>;
+
+template <typename T, typename U = T>
 using is_multipliable = is_detected<multiply, T, U>;
 
 template <typename T, typename U>
@@ -131,6 +138,7 @@ using is_nothrow_swappable = std::integral_constant<bool, noexcept(swap(std::dec
 
 template <typename T1, typename T2>
 using is_strong_swappable_with = is_detected<swapping, T1, T2>;
+
 
 using handle = strong::type<int, struct handle_tag>;
 
@@ -229,6 +237,7 @@ static_assert(!std::is_constructible<bool, ahandle>{}, "");
 static_assert(!is_incrementable<ahandle>{},"");
 static_assert(!is_decrementable<ahandle>{},"");
 static_assert(std::is_arithmetic<ahandle>{},"");
+static_assert(is_modulo_able<ahandle>{},"");
 static_assert(!is_hashable<ahandle>{},"");
 static_assert(is_subtractable<ahandle>{}, "");
 static_assert(!is_subtractable<ahandle, bhandle>{},"");
@@ -238,6 +247,9 @@ static_assert(!is_range<ahandle>{}, "");
 using ahandle2 = strong::type<int, struct ahandle2_tag, strong::arithmetic>;
 
 static_assert(!is_subtractable<ahandle, ahandle2>{},"");
+
+using afhandle = strong::type<float, struct afloat_tag, strong::arithmetic>;
+static_assert(!is_modulo_able<afhandle>{},"");
 
 using hhandle = strong::type<int, struct hhandle_tag, strong::hashable>;
 
@@ -306,6 +318,9 @@ static_assert(!is_addable<dhandle,dhandle>{},"");
 static_assert(is_addable<dhandle,handle>{},"");
 static_assert(is_addable<handle,dhandle>{},"");
 static_assert(!is_range<dhandle>{}, "");
+
+using ddhandle = strong::type<int, struct int_tag, strong::affine_point<>>;
+static_assert(std::is_same<ddhandle::difference, strong::type<int, struct int_tag, strong::difference>>{}, "");
 
 using ri = strong::type<int*, struct ipt, strong::iterator>;
 
@@ -399,7 +414,7 @@ static_assert(std::is_nothrow_destructible<crhi>{},"");
 using uhandle = strong::type<int, struct uh_, strong::difference>;
 static_assert(!std::is_default_constructible<uhandle>{},"");
 static_assert(std::is_copy_constructible<uhandle>{},"");
-static_assert(!is_equal_comparable<uhandle>{}, "");
+static_assert(is_equal_comparable<uhandle>{}, "");
 static_assert(std::is_nothrow_assignable<uhandle, const uhandle&>{}, "");
 static_assert(std::is_nothrow_assignable<uhandle, uhandle&&>{}, "");
 static_assert(is_less_than_comparable<uhandle>{},"");
@@ -421,9 +436,15 @@ static_assert(is_divisible<uhandle, int>{}, "");
 static_assert(is_multipliable<uhandle, int>{}, "");
 static_assert(is_multipliable<int, uhandle>{}, "");
 static_assert(!is_multipliable<uhandle, uhandle>{}, "");
+static_assert(is_modulo_able<uhandle>{},"");
+static_assert(is_modulo_able<uhandle, int>{},"");
 static_assert(!is_addable<uhandle,li>{},"");
 static_assert(!is_range<uhandle>{}, "");
 static_assert(!is_range<const uhandle>{}, "");
+
+using ufhandle = strong::type<float, struct uf_, strong::difference>;
+static_assert(!is_modulo_able<ufhandle>{},"");
+static_assert(!is_modulo_able<ufhandle, float>{},"");
 
 static_assert(is_strong_swappable_with<handle, handle>::value, "");
 static_assert(!is_strong_swappable_with<handle, handle2>::value, "");
@@ -811,6 +832,20 @@ TEST_CASE("arithmetic types can be divided")
   REQUIRE(value_of(j) == 3);
 }
 
+TEST_CASE("the remainder of integral arithmetic types can be calculated")
+{
+    using T = strong::type<int, struct i_, strong::arithmetic>;
+
+    T i{12};
+    T j{5};
+    REQUIRE(value_of(i % j) == 2);
+    REQUIRE(value_of(i) == 12);
+    REQUIRE(value_of(j) == 5);
+    i %= j;
+    REQUIRE(value_of(i) == 2);
+    REQUIRE(value_of(j) == 5);
+}
+
 TEST_CASE("an aritmmetic type can be negated")
 {
   using T = strong::type<int, struct i_, strong::arithmetic>;
@@ -955,6 +990,17 @@ TEST_CASE("affine_point types can be subtracted")
   REQUIRE(value_of(d) == 5);
 }
 
+TEST_CASE("affine point type with defaulted difference type yields it when subtracting")
+{
+    using T = strong::type<int, struct i_, strong::affine_point<>>;
+
+    T t1{3};
+    T t2{8};
+    auto d = t2 - t1;
+    static_assert(std::is_same<decltype(d), strong::type<int, struct i_, strong::difference>>{},"");
+    REQUIRE(value_of(d) == 5);
+}
+
 TEST_CASE("affine_point types can be added with the delta type")
 {
   using D = strong::type<int, struct i_>;
@@ -1025,6 +1071,31 @@ TEST_CASE("dividing difference types yields a base type")
   REQUIRE(r == 4);
 }
 
+TEST_CASE("remainder after division between difference types yields a base type")
+{
+    using U = strong::type<int, struct U_, strong::difference>;
+
+    U u1{15};
+    U u2{6};
+
+    auto r = u1 % u2;
+
+    static_assert(std::is_same<decltype(r), int>{},"");
+    REQUIRE(r == 3);
+}
+
+TEST_CASE("remainder after division between difference type and base type yields a difference type")
+{
+    using U = strong::type<int, struct U_, strong::difference, strong::regular>;
+
+    U u{15};
+
+    auto r = u % 6;
+
+    static_assert(std::is_same<decltype(r), U>{}, "");
+    REQUIRE(r == U{3});
+}
+
 TEST_CASE("dividing a difference type with its base type yields a difference")
 {
   using U = strong::type<int, struct U_, strong::difference>;
@@ -1034,6 +1105,31 @@ TEST_CASE("dividing a difference type with its base type yields a difference")
   auto r = u/2;
   static_assert(std::is_same<decltype(r), U>{}, "");
   REQUIRE(value_of(r) == 4);
+}
+
+TEST_CASE("difference types are ordered and equality comparable")
+{
+    using U = strong::type<int, struct U_, strong::difference>;
+
+    U u1{1};
+    U u2{2};
+    U u3{1};
+
+    REQUIRE(u1 == u3);
+    REQUIRE(!(u1 == u2));
+    REQUIRE(u1 != u2);
+    REQUIRE(!(u1 != u3));
+    REQUIRE(u1 < u2);
+    REQUIRE(!(u1 < u3));
+    REQUIRE(u1 <= u2);
+    REQUIRE(u1 <= u3);
+    REQUIRE(!(u2 <= u1));
+    REQUIRE(u2 > u1);
+    REQUIRE(!(u3 > u1));
+    REQUIRE(!(u3 > u2));
+    REQUIRE(u3 >= u1);
+    REQUIRE(u3 >= u1);
+    REQUIRE(!(u3 >= u2));
 }
 
 TEST_CASE("multiplying a difference with its base type yields a difference")

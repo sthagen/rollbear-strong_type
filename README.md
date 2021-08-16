@@ -2,7 +2,7 @@
 An additive strong typedef library for C++14/17/20 using the
 Boost Software License 1.0
 
-[![Build Status](https://api.cirrus-ci.com/github/rollbear/strong_type.svg)](https://cirrus-ci.com/github/rollbear/strong_type)
+[![CI Build Status](https://github.com/rollbear/strong_type/actions/workflows/ci.yml/badge.svg)](https://github.com/rollbear/strong_type/actions/workflows/ci.yml)
 
 Very much inspired by [@foonathan's](https://twitter.com/foonathan)
 [`type_safe`](https://github.com/foonathan/type_safe) library, but aim is
@@ -102,8 +102,11 @@ can thus be used as key in `std::map`<> or `std::set<>`.
 
 * `strong::difference` allows instances to be subtracted and added (yielding a
   `strong::difference`,) divided (yielding the base type), or multiplied or
-  divided with the base type, yielding another `strong::difference`. A
-  `strong::difference` is also `strong::ordered`
+  divided with the base type, yielding another `strong::difference`, and if 
+  the underlying type supports it, the remainder after division of two
+  differences yields the underlying type, and the remainder after division of
+  a difference and the underlying type yields a difference.
+  A `strong::difference` is also `strong::ordered` and `strong::equality`
 
 * `strong::affine_point<D>` allows instances to be subtracted (yielding a `D`) or
   to add or subtract a `D` to an instance.
@@ -111,6 +114,10 @@ can thus be used as key in `std::map`<> or `std::set<>`.
   one dimentional affine points are pointer (with `D` being `ptrdiff_t`,) or
   `std::time_point<>` (with `std::duration<>` as `D`.) An example of a
   multidimensional affine point is a coordinate (with a vector type for `D`.)
+  `D` can be defaulted, using `strong::affine_point<>`, in which case the
+  difference type shares the same tag.
+  The difference type from a `strong::affine_point<D>` can be obtained using
+  `type::difference`, regardless of whether `D` is explicit or defaulted.
   It is natural that `D` is of a `strong::difference` type. This is a good name
   from a mathematical point of view, but perhaps a bit too academic, and not
   well aligned with the other names.
@@ -131,7 +138,7 @@ can thus be used as key in `std::map`<> or `std::set<>`.
 
 * `strong::iterator` adds functionality needed depending on iterator category.
   If the iterator type is a `random_access_iterator`, the strong type
-  is `strong::indexed<>` and `strong::affine_point<difference_type>`. It should be
+  is `strong::indexed<>` and `strong::affine_point<difference>`. It should be
   possible to specify the index type and affine_point type.
 
 * `strong::range` adds the functionality needed to iterate over the elements.
