@@ -32,25 +32,31 @@ if (MASTER_PROJECT AND CMAKE_BUILD_TYPE MATCHES Debug)
   set(CMAKE_CXX_STANDARD_REQUIRED YES)
   set(CMAKE_CXX_EXTENSIONS OFF)
 
-  set(CATCH_DIR ${CMAKE_CURRENT_BINARY_DIR}/catch)
-  if(NOT EXISTS ${CATCH_DIR}/catch.hpp)
-    if (NOT EXISTS ${CATCH_DIR})
-      make_directory(${CATCH_DIR})
-    endif()
-    file(
-      DOWNLOAD
-        https://github.com/catchorg/Catch2/releases/download/v2.13.9/catch.hpp  ${CATCH_DIR}/catch.hpp
-      STATUS
-        status
-      LOG
-        log
-    )
-    list(GET status 0 status_code)
-    list(GET status 1 status_string)
+  if (CATCH2_PREFIX)
+    set(CATCH_DIR "")
+    set(TEST_MAIN "")
+  else()
+    set(TEST_MAIN "test_main.cpp")
+    set(CATCH_DIR ${CMAKE_CURRENT_BINARY_DIR}/catch)
+    if(NOT EXISTS ${CATCH_DIR}/catch2/catch.hpp)
+      if (NOT EXISTS ${CATCH_DIR}/catch2)
+        make_directory(${CATCH_DIR}/catch2)
+      endif()
+      file(
+        DOWNLOAD
+          https://github.com/catchorg/Catch2/releases/download/v2.13.9/catch.hpp  ${CATCH_DIR}/catch2/catch.hpp
+        STATUS
+          status
+        LOG
+          log
+      )
+      list(GET status 0 status_code)
+      list(GET status 1 status_string)
 
-    if(NOT status_code EQUAL 0)
-      message(FATAL_ERROR "error downloading catch: ${status_string}"
-        "${log}")
+      if(NOT status_code EQUAL 0)
+        message(FATAL_ERROR "error downloading catch: ${status_string}"
+          "${log}")
+      endif()
     endif()
   endif()
 endif()
@@ -79,12 +85,129 @@ add_executable(
   EXCLUDE_FROM_ALL
     test.cpp
     include/strong_type/strong_type.hpp
-    test_main.cpp)
+    ${TEST_MAIN})
 target_include_directories(
     self_test
   PRIVATE
     ${CATCH_DIR}
 )
+
+if (CATCH2_PREFIX)
+  target_compile_definitions(
+          self_test
+          PRIVATE
+          CATCH2_PREBUILT)
+  target_link_libraries(
+          self_test
+          PUBLIC
+          Catch2Main
+          Catch2
+  )
+  target_link_directories(
+          self_test
+          PRIVATE
+          "${CATCH2_PREFIX}/lib"
+  )
+  target_include_directories(
+          self_test
+          PRIVATE
+          ${CATCH2_PREFIX}/include
+  )
+endif()
+
+if (FMT8_PREFIX)
+  add_executable(
+          test_fmt8
+          EXCLUDE_FROM_ALL
+          test_fmt.cpp
+          ${TEST_MAIN})
+  target_link_libraries(
+          test_fmt8
+          PRIVATE
+          fmt
+          strong_type
+  )
+  target_link_directories(
+          test_fmt8
+          PRIVATE
+          ${FMT8_PREFIX}/lib
+  )
+  target_include_directories(
+          test_fmt8
+          PRIVATE
+          ${FMT8_PREFIX}/include
+          ${CATCH_DIR}
+  )
+  if (CATCH2_PREFIX)
+    target_compile_definitions(
+            test_fmt8
+            PRIVATE
+            CATCH2_PREBUILT)
+    target_link_libraries(
+            test_fmt8
+            PUBLIC
+            Catch2Main
+            Catch2
+    )
+    target_link_directories(
+            test_fmt8
+            PRIVATE
+            "${CATCH2_PREFIX}/lib"
+    )
+    target_include_directories(
+            test_fmt8
+            PRIVATE
+            ${CATCH2_PREFIX}/include
+    )
+  endif()
+endif()
+if (FMT9_PREFIX)
+  add_executable(
+          test_fmt9
+          EXCLUDE_FROM_ALL
+          test_fmt.cpp
+          ${TEST_MAIN})
+  target_link_libraries(
+          test_fmt9
+          PRIVATE
+          fmt
+          strong_type
+  )
+  target_link_directories(
+          test_fmt9
+          PRIVATE
+          ${FMT9_PREFIX}/lib
+  )
+  target_include_directories(
+          test_fmt9
+          PRIVATE
+          ${FMT9_PREFIX}/include
+          ${CATCH_DIR}
+  )
+  if (CATCH2_PREFIX)
+    target_compile_definitions(
+            test_fmt9
+            PRIVATE
+            CATCH2_PREBUILT)
+    target_link_libraries(
+            test_fmt9
+            PUBLIC
+            Catch2Main
+            Catch2
+    )
+    target_link_directories(
+            test_fmt9
+            PRIVATE
+            "${CATCH2_PREFIX}/lib"
+    )
+    target_include_directories(
+            test_fmt9
+            PRIVATE
+            ${CATCH2_PREFIX}/include
+    )
+  endif()
+endif()
+
 target_link_libraries(
     self_test
   PRIVATE

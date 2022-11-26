@@ -22,8 +22,11 @@
 #include <vector>
 #include <sstream>
 
-#include <catch.hpp>
-
+#ifdef CATCH2_PREBUILT
+#include <catch2/catch_test_macros.hpp>
+#else
+#include <catch2/catch.hpp>
+#endif
 template <typename T, typename U>
 using equality_compare = decltype(std::declval<const T&>() == std::declval<const U&>());
 
@@ -143,6 +146,8 @@ using is_strong_swappable_with = is_detected<swapping, T1, T2>;
 
 template <typename R, typename I>
 using has_at = is_detected<at, R, I>;
+
+using uint = unsigned int;
 
 using handle = strong::type<int, struct handle_tag>;
 
@@ -271,10 +276,10 @@ static_assert(is_hashable<hhandle>{},"");
 static_assert(!is_indexable<hhandle, int>{}, "");
 static_assert(!is_range<hhandle>{}, "");
 
-using ihandle = strong::type<std::string, struct string_tag, strong::indexed<int>>;
+using ihandle = strong::type<std::string, struct string_tag, strong::indexed<uint>>;
 
 static_assert(!std::is_default_constructible<ihandle>{},"");
-static_assert(!std::is_nothrow_constructible<ihandle, int>{},"");
+static_assert(!std::is_nothrow_constructible<ihandle, uint>{},"");
 static_assert(std::is_copy_constructible<ihandle>{},"");
 static_assert(!std::is_constructible<ihandle, strong::uninitialized_t>{}, "");
 
@@ -289,8 +294,8 @@ static_assert(!std::is_constructible<bool, ihandle>{}, "");
 static_assert(!is_incrementable<ihandle>{},"");
 static_assert(!is_decrementable<ihandle>{},"");
 static_assert(!is_hashable<ihandle>{},"");
-static_assert(is_indexable<ihandle, int>{}, "");
-static_assert(has_at<ihandle, int>{}, "");
+static_assert(is_indexable<ihandle, uint>{}, "");
+static_assert(has_at<ihandle, uint>{}, "");
 static_assert(!is_range<ihandle>{}, "");
 
 using dhandle = strong::type<int, struct int_tag, strong::affine_point<handle>>;
@@ -1272,9 +1277,11 @@ TEST_CASE("conversions")
   REQUIRE_FALSE(invalide);
 
   std::string svalidi = validi;
-  std::string svalide{valide};
   REQUIRE(svalidi == "value");
+#if !defined(__GNUC__) || __GNUC__ > 7
+  std::string svalide{valide};
   REQUIRE(svalide == "value");
+#endif
 }
 
 TEST_CASE("ordered_with")
@@ -1303,26 +1310,14 @@ TEST_CASE("ordered_with")
   REQUIRE_FALSE(1 > i1);
 }
 
-#if STRONG_HAS_STD_FORMAT || STRONG_HAS_FMT_FORMAT
+#if STRONG_HAS_STD_FORMAT
 TEST_CASE("format")
 {
   using formatint = strong::type<int, struct formattag, strong::formattable>;
 
   formatint fi{5};
-
-#if STRONG_HAS_FMT_FORMAT
-  CHECK(fmt::format("{:d}", fi) == fmt::format("{:d}", 5));
-#if FMT_VERSION >= 80000
-  CHECK_THROWS_AS(fmt::format(fmt::runtime("{:s}"), fi), fmt::format_error);
-#else
-  CHECK_THROWS_AS(fmt::format("{:s}", fi), fmt::format_error);
-#endif
-#endif
-
-#if STRONG_HAS_STD_FORMAT
   CHECK(std::format("{:d}", fi) == std::format("{:d}", 5));
   // Use std::vformat to mitigate the compile time check.
   CHECK_THROWS_AS(std::vformat("{:s}", std::make_format_args(fi)), std::format_error);
-#endif
 }
 #endif

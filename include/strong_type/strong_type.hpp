@@ -26,7 +26,7 @@
 #define STRONG_NODISCARD
 #endif
 
-#if defined(_MSC_VER) && !defined(__clang__) && __MSC_VER < 1922
+#if defined(_MSC_VER) && !defined(__clang__) && _MSC_VER < 1922
 #define STRONG_CONSTEXPR
 #else
 #define STRONG_CONSTEXPR constexpr
@@ -59,10 +59,7 @@
 
 #if STRONG_HAS_FMT_FORMAT
 #include <fmt/format.h>
-
-#if FMT_VERSION >= 90000
 #include <fmt/ostream.h>
-#endif
 #endif
 
 namespace strong
@@ -1157,7 +1154,8 @@ struct bitarithmetic
       const T &rh)
     noexcept(noexcept(value_of(lh) &= value_of(rh)))
     {
-      value_of(lh) &= value_of(rh);
+      using type = underlying_type_t<T>;
+      value_of(lh) = type(value_of(lh) & value_of(rh));
       return lh;
     }
 
@@ -1169,7 +1167,8 @@ struct bitarithmetic
       const T &rh)
     noexcept(noexcept(value_of(lh) |= value_of(rh)))
     {
-      value_of(lh) |= value_of(rh);
+      using type = underlying_type_t<T>;
+      value_of(lh) = type(value_of(lh) | value_of(rh));
       return lh;
     }
 
@@ -1181,7 +1180,8 @@ struct bitarithmetic
       const T &rh)
     noexcept(noexcept(value_of(lh) ^= value_of(rh)))
     {
-      value_of(lh) ^= value_of(rh);
+      using type = underlying_type_t<T>;
+      value_of(lh) = type(value_of(lh) ^ value_of(rh));
       return lh;
     }
 
@@ -1194,7 +1194,8 @@ struct bitarithmetic
       C c)
     noexcept(noexcept(value_of(lh) <<= c))
     {
-      value_of(lh) <<= c;
+      using type = underlying_type_t <T>;
+      value_of(lh) = type(value_of(lh) << c);
       return lh;
     }
 
@@ -1207,7 +1208,8 @@ struct bitarithmetic
       C c)
     noexcept(noexcept(value_of(lh) >>= c))
     {
-      value_of(lh) >>= c;
+      using type = underlying_type_t<T>;
+      value_of(lh) = type(value_of(lh) >> c);
       return lh;
     }
 
@@ -1218,9 +1220,9 @@ struct bitarithmetic
     operator~(
       const T &lh)
     {
+      using type = underlying_type_t<T>;
       auto v = value_of(lh);
-      v = ~v;
-      return T(v);
+      return T(type(~v));
     }
 
     STRONG_NODISCARD
