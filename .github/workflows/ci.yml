@@ -5,7 +5,7 @@ on: [push, pull_request]
 jobs:
   build_linux:
     runs-on: ubuntu-20.04
-    container: "ghcr.io/rollbear/${{matrix.config.container}}"
+    container: { image: "ghcr.io/rollbear/${{matrix.config.container}}", options: "--security-opt seccomp=unconfined" }
     strategy:
       fail-fast: false
       matrix:
@@ -52,16 +52,14 @@ jobs:
           then
             STDLIB="-stdlib=libc++"
           fi
-          LIBRARY_SUFFIX="c++${{matrix.config.std}}${{matrix.config.stdlib}}"
+          LIBRARY_PREFIX="/usr/local/lib/c++${{matrix.config.std}}${{matrix.config.stdlib}}"
           cmake \
             -S . \
             -B build \
             -DCMAKE_CXX_COMPILER=${{matrix.config.cxx}} \
             -DCMAKE_CXX_STANDARD=${{matrix.config.std}} \
-            -DCMAKE_CXX_FLAGS="${STDLIB} -Wall -Wextra -Wconversion -pedantic -Werror" \
-            -DCATCH2_PREFIX="/usr/local/catch2-3-${LIBRARY_SUFFIX}" \
-            -DFMT8_PREFIX="/usr/local/fmt-8-${LIBRARY_SUFFIX}" \
-            -DFMT9_PREFIX="/usr/local/fmt-9-${LIBRARY_SUFFIX}" \
+            -DCMAKE_CXX_FLAGS="${STDLIB} -Wall -Wextra -Wconversion -pedantic -Werror --coverage" \
+            -DCMAKE_PREFIX_PATH="${LIBRARY_PREFIX}" \
             -DCMAKE_BUILD_TYPE=Debug
       - name: "build"
         run: |
@@ -70,8 +68,22 @@ jobs:
       - name: "test"
         run: |
           ./build/self_test && \
-          ./build/test_fmt8 && \
-          ./build/test_fmt9
+          ./build/test_fmt8/test_fmt8 && \
+          ./build/test_fmt9/test_fmt9
+
+      - name: "collect coverage"
+        run: |
+          COV=`echo ${{matrix.config.cxx}} | grep -q clang && echo "llvm-cov gcov"|| echo gcov`
+          echo ${COV} -abcfu `find . -name "test*.gcno"`
+          ${COV} -abcfu `find . -name "test*.gcno"`
+
+      - name: "upload coverage"
+        uses: codecov/codecov-action@v3
+        with:
+          files: "strong_type.hpp.gcov"
+          name: "Linux ${{matrix.config.cxx}} C++${{matrix.config.std}} ${{matrix.config.stdlib}}"
+          fail_ci_if_error: false
+          verbose: true
 
   build_windows:
     runs-on: windows-latest

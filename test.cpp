@@ -22,7 +22,7 @@
 #include <vector>
 #include <sstream>
 
-#ifdef CATCH2_PREBUILT
+#if CATCH2 == 3
 #include <catch2/catch_test_macros.hpp>
 #else
 #include <catch2/catch.hpp>
@@ -549,6 +549,19 @@ static_assert(is_less_than_comparable<iov, int>{},"");
 static_assert(is_less_than_comparable<int, iov>{},"");
 static_assert(!is_less_than_comparable<iov, iov>{},"");
 
+template <typename T>
+const T& as_const(T& t) { return t;}
+template <typename T>
+const T&& as_const(T&& t) { return std::move(t);}
+
+TEST_CASE("default_constructible initializes with underlying default constructor")
+{
+    constexpr strong::type<int, struct i_, strong::default_constructible> vc;
+    STATIC_REQUIRE(value_of(vc) == 0);
+    strong::type<int, struct i_, strong::default_constructible> vr;
+    REQUIRE(value_of(vr) == 0);
+}
+
 TEST_CASE("Construction from a value type lvalue copies it")
 {
   auto orig = std::make_shared<int>(3);
@@ -661,6 +674,179 @@ TEST_CASE("ordered type can be compared for ordering")
   REQUIRE_FALSE(i2 <= i1);
   REQUIRE_FALSE(i1 > i2);
   REQUIRE_FALSE(i1 >= i2);
+}
+TEST_CASE("freestanding value_of() gets the underlying value")
+{
+    GIVEN("a strong value")
+    {
+        using type = strong::type<int, struct type_>;
+        type var{3};
+        WHEN("calling value_of() on a const lvalue")
+        {
+            auto &&v = value_of(as_const(var));
+            THEN("a const lvalue reference is returned")
+            {
+                STATIC_REQUIRE(std::is_same<decltype(v), const int&>{});
+            }
+            AND_THEN("the value is the one constructed from")
+            {
+                REQUIRE(v ==  3);
+            }
+        }
+        AND_WHEN("calling value_of() on a non-const lvalue")
+        {
+            auto&& v = value_of(var);
+            THEN("a non-const lvalue reference is returned")
+            {
+                STATIC_REQUIRE(std::is_same<decltype(v), int&>{});
+            }
+            AND_THEN("the value is the one constructed from")
+            {
+                REQUIRE(v == 3);
+            }
+            AND_THEN("a write to the returned reference changes the value")
+            {
+                v = 4;
+                REQUIRE(value_of(var) == 4);
+            }
+        }
+        AND_WHEN("calling value_of() on a non-const rvalue")
+        {
+            auto&& v = value_of(std::move(var));
+            THEN("a non-const rvalue reference is returned")
+            {
+                STATIC_REQUIRE(std::is_same<decltype(v), int&&>{});
+            }
+            AND_THEN("the value is the one constructed from")
+            {
+                REQUIRE(v == 3);
+            }
+        }
+        AND_WHEN("calling value_of() on a const rvalue")
+        {
+            auto&& v = value_of(std::move(as_const(var)));
+            THEN("a const lvalue refercence is returned")
+            {
+                STATIC_REQUIRE(std::is_same<decltype(v), const int&>{});
+            }
+            AND_THEN("the value is the one constructed from")
+            {
+                REQUIRE(v == 3);
+            }
+        }
+    }
+}
+
+TEST_CASE("member value_of() gets the underlying value")
+{
+    GIVEN("a strong value")
+    {
+        using type = strong::type<int, struct type_>;
+        type var{3};
+        WHEN("calling value_of() on a const lvalue")
+        {
+            auto &&v = as_const(var).value_of();
+            THEN("a const lvalue reference is returned")
+            {
+                STATIC_REQUIRE(std::is_same<decltype(v), const int&>{});
+            }
+            AND_THEN("the value is the one constructed from")
+            {
+                REQUIRE(v ==  3);
+            }
+        }
+        AND_WHEN("calling value_of() on a non-const lvalue")
+        {
+            auto&& v = var.value_of();
+            THEN("a non-const lvalue reference is returned")
+            {
+                STATIC_REQUIRE(std::is_same<decltype(v), int&>{});
+            }
+            AND_THEN("the value is the one constructed from")
+            {
+                REQUIRE(v == 3);
+            }
+            AND_THEN("a write to the returned reference changes the value")
+            {
+                v = 4;
+                REQUIRE(value_of(var) == 4);
+            }
+        }
+        AND_WHEN("calling value_of() on a non-const rvalue")
+        {
+            auto&& v = std::move(var).value_of();
+            THEN("a non-const rvalue reference is returned")
+            {
+                STATIC_REQUIRE(std::is_same<decltype(v), int&&>{});
+            }
+            AND_THEN("the value is the one constructed from")
+            {
+                REQUIRE(v == 3);
+            }
+        }
+        AND_WHEN("calling value_of() on a const rvalue")
+        {
+            auto&& v = std::move(as_const(var)).value_of();
+            THEN("a const lvalue refercence is returned")
+            {
+                STATIC_REQUIRE(std::is_same<decltype(v), const int&>{});
+            }
+            AND_THEN("the value is the one constructed from")
+            {
+                REQUIRE(v == 3);
+            }
+        }
+    }
+}
+
+TEST_CASE("equality_with can compare with defined type")
+{
+    using t1 = strong::type<int, struct t1_>;
+    using t2 = strong::type<int, struct t2_, strong::equality_with<t1>>;
+
+    REQUIRE(t1{1} == t2{1});
+    REQUIRE(t2{1} == t1{1});
+    REQUIRE(t1{1} != t2{2});
+    REQUIRE(t2{2} != t1{1});
+}
+
+TEST_CASE("strong::unique is movable")
+{
+    using t = strong::type<std::unique_ptr<int>, struct t_, strong::unique>;
+
+    GIVEN("an initialized source")
+    {
+        t source{std::make_unique<int>(3)};
+        auto* addr = value_of(source).get();
+
+        WHEN("move constructing a dest")
+        {
+            auto dest = std::move(source);
+            THEN("the source is moved from")
+            {
+                REQUIRE(value_of(source).get() == nullptr);
+            }
+            AND_THEN("the dest has the value that source had")
+            {
+                REQUIRE(*value_of(dest) == 3);
+                REQUIRE(value_of(dest).get() == addr);
+            }
+        }
+        AND_WHEN("move assigning to another instance")
+        {
+            t dest{std::make_unique<int>(4)};
+            dest = std::move(source);
+            THEN("the source is moved from")
+            {
+                REQUIRE(value_of(source).get() == nullptr);
+            }
+            AND_THEN("the dest has the value that source had")
+            {
+                REQUIRE(*value_of(dest) == 3);
+                REQUIRE(value_of(dest).get() == addr);
+            }
+        }
+    }
 }
 
 TEST_CASE("an ostreamable type can be streamed using stream flags")
@@ -975,6 +1161,27 @@ TEST_CASE("indexed can be accessed using operator [] and .at()")
   auto& acri = ci.at(I{0U});
   static_assert(std::is_const<std::remove_reference_t<decltype(acri)>>{}, "");
   REQUIRE(acri == 'b');
+
+  // operator[] on std::string returns lvalue reference
+  static_assert(std::is_same<decltype(std::declval<std::string&&>()[1]), char&>{},"");
+  // hence ...
+
+  auto&& tmp = std::move(s)[1U];
+  STATIC_REQUIRE(std::is_same<decltype(tmp), char&>{});
+  REQUIRE(tmp == 'o');
+
+  auto&& tmpat = std::move(s).at(1U);
+  STATIC_REQUIRE(std::is_same<decltype(tmpat), char&>{});
+  REQUIRE(tmpat == 'o');
+
+
+  auto&& tmpi = std::move(si)[I{1U}];
+  STATIC_REQUIRE(std::is_same<decltype(tmpi), char&>{});
+  REQUIRE(tmpi == 'o');
+
+  auto&& tmpiat = std::move(si).at(I{1U});
+  STATIC_REQUIRE(std::is_same<decltype(tmpiat), char&>{});
+  REQUIRE(tmpiat == 'o');
 }
 
 template <typename T, size_t N>
@@ -996,7 +1203,6 @@ using array = strong::type<simple_array<T, N>, struct array_,
 template <typename ...> struct S;
 TEST_CASE("indexed can be accessed with operator[] without at()")
 {
-    static auto as_const = [](const auto& x) -> decltype(auto) { return x;};
     static_assert(is_indexable<array<int, 3>, int>{}, "");
     static_assert(!has_at<array<int, 3>, int>{}, "");
 
@@ -1310,6 +1516,18 @@ TEST_CASE("ordered_with")
   REQUIRE_FALSE(1 > i1);
 }
 
+TEST_CASE("strong::hashable in unordered_set")
+{
+  using hs = strong::type<std::string, struct hs_, strong::hashable, strong::regular>;
+
+  using sset = std::unordered_set<hs>;
+
+  sset strings{hs{"foo"}, hs{"bar"}};
+
+  REQUIRE(strings.find(hs{"foo"}) != strings.end());
+  REQUIRE(strings.find(hs{"bar"}) != strings.end());
+  REQUIRE(strings.find(hs{"baz"}) == strings.end());
+}
 #if STRONG_HAS_STD_FORMAT
 TEST_CASE("format")
 {
