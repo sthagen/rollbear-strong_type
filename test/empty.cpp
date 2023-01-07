@@ -12,6 +12,5 @@
  */
 
 
-#define CATCH_CONFIG_MAIN
-#include <catch2/catch.hpp>
 
+#include <strong_type/strong_type.hpp>

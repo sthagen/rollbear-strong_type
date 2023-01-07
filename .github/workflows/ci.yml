@@ -60,6 +60,7 @@ jobs:
             -DCMAKE_CXX_STANDARD=${{matrix.config.std}} \
             -DCMAKE_CXX_FLAGS="${STDLIB} -Wall -Wextra -Wconversion -pedantic -Werror --coverage" \
             -DCMAKE_PREFIX_PATH="${LIBRARY_PREFIX}" \
+            -DSTRONG_TYPE_UNIT_TEST=yes \
             -DCMAKE_BUILD_TYPE=Debug
       - name: "build"
         run: |
@@ -67,20 +68,20 @@ jobs:
 
       - name: "test"
         run: |
-          ./build/self_test && \
-          ./build/test_fmt8/test_fmt8 && \
-          ./build/test_fmt9/test_fmt9
+          ./build/test/self_test && \
+          ./build/test/test_fmt8/test_fmt8 && \
+          ./build/test/test_fmt9/test_fmt9
 
       - name: "collect coverage"
         run: |
           COV=`echo ${{matrix.config.cxx}} | grep -q clang && echo "llvm-cov gcov"|| echo gcov`
-          echo ${COV} -abcfu `find . -name "test*.gcno"`
-          ${COV} -abcfu `find . -name "test*.gcno"`
+          ${COV} -abcfup `find . -name "test*.gcno"`
+          ls *.gcov| grep -v 'include#strong_type'|xargs rm
 
       - name: "upload coverage"
         uses: codecov/codecov-action@v3
         with:
-          files: "strong_type.hpp.gcov"
+          gcov_include: "include/strong_type"
           name: "Linux ${{matrix.config.cxx}} C++${{matrix.config.std}} ${{matrix.config.stdlib}}"
           fail_ci_if_error: false
           verbose: true
@@ -97,6 +98,10 @@ jobs:
     name: "Windows C++${{matrix.config.std}}"
     steps:
       - uses: actions/checkout@v3
+
+      - name: "Install ninja"
+        uses: seanmiddleditch/gha-setup-ninja@master
+
       - name: "setup"
         shell: bash
         run: |
@@ -104,10 +109,16 @@ jobs:
             -S . \
             -B build \
             -DCMAKE_CXX_STANDARD=${{matrix.config.std}} \
-            -DCMAKE_BUILD_TYPE=Debug
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DSTRONG_TYPE_UNIT_TEST=yes \
+            -G Ninja
+
       - name: "build"
+        shell: bash
         run: |
           cmake --build build --target self_test
+
       - name: "test"
+        shell: bash
         run: |
-          build\Debug\self_test.exe
+          ./build/test/self_test.exe
