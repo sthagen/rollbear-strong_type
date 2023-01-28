@@ -8,6 +8,7 @@ Boost Software License 1.0
 * [Intro](#intro)
 * [Modifiers](#modifiers)
 * [Utilities](#utilities)
+* [Writing a modifier](#writing_modifier)
 * [Self test](#selftest)
 * [Other libraries](#other)
 * [Presentations](#presentations)
@@ -82,6 +83,9 @@ some situations.
 
 * <A name="arithmetic"/>`strong::arithmetic` allows addition, subtraction,
   multiplication, division and remainder of instances.
+
+  [`std::numeric_limits<T>`](https://en.cppreference.com/w/cpp/types/numeric_limits)
+  is specialized for types using the `strong::arithmetic` modifier.
 
   Available in `strong_type/arithmetic.hpp`.
 
@@ -296,10 +300,12 @@ A number of small utilities are available directly in `strong_type/type.hpp`.
 
 * `strong::type` provides a non-member `swap()` function as a friend, which
    swaps underlying values using.
-  
+
+
 * `strong::underlying_type<Type>` is `T` for `strong::type<T, Tag, Ms...>` and
-   public descendants, and `Type` for other types. 
-      
+   public descendants, and `Type` for other types.
+
+
 * `strong::uninitialized` can be used to construct instances of `strong::type<T...>`
   without initializing the value. This is only possible if the underlying type
   is [`trivially default constructible`](
@@ -312,7 +318,269 @@ A number of small utilities are available directly in `strong_type/type.hpp`.
       init(&value_of(x)); // hopefully the init() function assigns a value
   }
   ```
-  
+
+* `strong::type_is<type, modifier>`, a boolean constant type whith the value of
+  `strong::type_is_v<type, modifier>`.
+
+
+* `strong::type_is_v<type, modifier>` is a constexpr predicate to test if a type
+  has a modifier. For variadic modifiers, like `strong::ordered_with<Ts...>`,
+  it tests each of the types `Ts` individually. Example:
+
+  ```C++
+  using handle = strong::type<int, struct handle_, strong::regular>;
+
+  static_assert(strong::type_is_v<handle, strong::equality>);
+  static_assert(strong::type_is_v<handle, strong::regular>);
+
+  using id = strong::type<int, struct id_, strong::ordered_with<int, long>>;
+
+  static_assert(strong::type_is_v<id, strong::ordered_with<int, long>>);
+  static_assert(strong::type_is_v<id, strong::ordered_with<long>>);
+  static_assert(strong::type_is_v<id, strong::ordered_with<int>>);
+  static_assert(strong::type_is_v<id, strong::ordered_with<>>);
+  ```
+
+  All `static_assert`s above pass.
+
+# <A name="writing_modifier"/>Writing a modifier
+
+A modifier is a nested structure. The outer type, a struct or class, is what
+the user sees. Inside it is a struct/class template that is a
+[CRTP](https://en.cppreference.com/w/cpp/language/crtp) mixin, and
+it must be named `modifier`, and the type it will be instantiated with is the
+complete strong type. A type
+`using my_strong_type = strong::type<int, struct my_, my_modifier>` will inherit
+publically from `my_modifier::modifier<my_strong_type>`. This CRTP mixin
+implements the functionality of the modifier.
+
+As an example, let's make a modifier that uses one value from the value space
+to mean 'has no value'. It is not uncommon in some low level code to see
+and `int` being used, and the value `-1` to mean no value. We can call it
+`optional<N>`, where `N` is the 'has no value' value, and the interface mimics
+that of [`std::optional`](https://en.cppreference.com/w/cpp/utility/optional).
+
+```C++
+template <auto no_value>
+struct optional
+{
+    template <typename T>
+    struct modifier
+    {
+        // implementation here
+    };
+};
+```
+
+This can already be used, but it's not very useful yet:
+
+```C++
+using my_type = strong::type<int, struct tag_, optional<0>>;
+static_assert(strong::type_is_v<my_type, optional<0>);
+```
+
+Let's add some functionality to the mixin. Since the strong type inherits
+publically from the `modifier<>` template, any public member function declared
+here becomes available from the strong type itself.
+
+```C++
+template <auto no_value>
+struct optional
+{
+    template <typename T> // This is the strong type
+    struct modifier
+    {
+        constexpr bool has_value() const noexcept
+        {
+            auto& self = static_cast<const T&>(*this);
+            return value_of(self) != no_value;
+        }
+    };
+};
+```
+Since the `modifier` mixin inherits from the strong type, it is always safe to
+[`static_cast<>`](https://en.cppreference.com/w/cpp/language/static_cast) to the
+strong type.
+
+It is now possible to query your strong type if it has a value or not.
+
+```C++
+using my_type = strong::type<int, struct tag_, optional<0>>;
+static_assert(my_type{3}.has_value());
+stacic_assert(! my_type{0}.has_value());
+```
+
+`std::optional<>` also has `operator*` to get the underlying value, without
+checking if it's valid. Let's add that too.
+
+```C++
+template <auto no_value>
+struct optional
+{
+    template <typename T> // This is the strong type
+    struct modifier
+    {
+        constexpr bool has_value() const noexcept;
+        constexpr strong::underlying_type_t<T>& operator*() noexcept
+        {
+            auto& self = static_cast<T&>(*this);
+            return value_of(self);
+        }
+        constexpr const strong::underlying_type_t<T>& operator*() const noexcept
+        {
+            auto& self = static_cast<const T&>(*this);
+            return value_of(self);
+        }
+    };
+};
+```
+This repetition quictly gets old. You can use a template trick to get rid of it:
+```C++
+template <auto no_value>
+struct optional
+{
+    template <typename T> // This is the strong type
+    struct modifier
+    {
+        constexpr bool has_value() const noexcept;
+        template <typename TT>
+        constexpr friend decltype(auto) operator*(TT&& tt) noexcept
+        {
+            return value_of(std::forward<TT>(tt));
+        }
+    };
+};
+```
+Yes, operators can be written as inline friends, which then accepts the type
+of the object as the parameter. This is often referred to as the
+["hidden friend idiom"](https://www.justsoftwaresolutions.co.uk/cplusplus/hidden-friends.html).
+By making the type a forwarding reference, this will match `T&`, `T&&`,
+`const T&`, `const T&&`, `volatile T&`, `volatile T&&`,`const volatile T&` and
+`const volatile T&&`. 8 overloads in one definition! Not bad.
+
+`std::optional<>` also has member functions `.value()`, which returns the value
+if there is one, or throws.
+
+```C++
+template <auto no_value>
+struct optional
+{
+    template <typename T> // This is the strong type
+    struct modifier
+    {
+        constexpr bool has_value() const noexcept;
+        template <typename TT>
+        constexpr friend decltype(auto) operator*(TT&& tt) noexcept;
+        strong::underlying_type_t<T>& value()
+        {
+            if (!has_value() {
+                throw std::bad_optional_access();
+            }
+            auto& self = static_cast<cT&>(*this);
+            return value_of(self);
+        }
+        const strong::underlying_type_t<T>& value() const
+        {
+            if (!has_value() {
+                throw std::bad_optional_access();
+            }
+            auto& self = static_cast<cconst T&>(*this);
+            return value_of(self);
+        }
+        // ... and more
+    };
+};
+```
+
+Unfortunately there is little that can be done to reduce the repetition here. A
+bit can be done by writing a static helper function template:
+
+```C++
+template <auto no_value>
+struct optional
+{
+    template <typename T> // This is the strong type
+    struct modifier
+    {
+        constexpr bool has_value() const noexcept;
+        template <typename TT>
+        constexpr friend decltype(auto) operator*(TT&& tt) noexcept;
+        decltype(auto) value() &
+        {
+            return get_value(static_cast<T&>(*this));
+        }
+        decltype(auto) value() const &
+        {
+            return get_value(static_cast<const T&>(*this));
+        }
+        decltype(auto) value() &&
+        {
+            return get_value(static_cast<T&&>(*this));
+        }
+        decltype(auto) value() const &&
+        {
+            return get_value(static_cast<const T&&>(*this));
+        }
+    private:
+        template <typename TT>
+        static constexpr decltype(auto) get_value(TT&& self)
+        {
+            if (!self.has_value()) {
+                throw std::bad_optional_access();
+            }
+            return value_of(std::forward<TT>(self));
+        }
+    };
+};
+```
+
+Here's the full implementation:
+```C++
+template <auto no_value>
+struct optional
+{
+    template <typename T>
+    struct modifier
+    {
+        constexpr bool has_value() const noexcept
+        {
+            auto& self = static_cast<const T&>(*this);
+            return value_of(self) != no_value;
+        }
+        template <typename TT>
+        friend constexpr decltype(auto) operator*(TT&& self) noexcept
+        {
+            return value_of(std::forward<TT>(self));
+        }
+        constexpr decltype(auto) value() &
+        {
+            return get_value(static_cast<T&>(*this));
+        }
+        constexpr decltype(auto) value() const &
+        {
+            return get_value(static_cast<const T&>(*this));
+        }
+        constexpr decltype(auto) value() &&
+        {
+            return get_value(static_cast<T&&>(*this));
+        }
+        constexpr decltype(auto) value() const &&
+        {
+            return get_value(static_cast<const T&&>(*this));
+        }
+    private:
+        template <typename TT>
+        static constexpr decltype(auto) get_value(TT&& t)
+        {
+            if (!t.has_value()) {
+                throw std::bad_optional_access();
+            }
+            return value_of(std::forward<TT>(t));
+        }
+    };
+};
+```
+
 # <A name="selftest"/> Self test
 
 To build the self-test program(s):
@@ -330,7 +598,7 @@ N.B. Microsoft Visual Studio MSVC compiler < 19.22 does not handle `constexpr`
 correctly. Those found to cause trouble are disabled for those versions.
 
 ## <A name="other"/> Other libraries:
- 
+
 | Library                                             | Author |
 |-----------------------------------------------------|-------------------|
 | [type_safe](https://github.com/foonathan/type_safe) | Jonathan Müller   |
