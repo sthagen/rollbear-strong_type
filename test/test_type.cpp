@@ -237,3 +237,15 @@ TEST_CASE("swap")
     CHECK(v2.value_of() == 6);
 }
 
+#if (__cpp_nontype_template_args >= 201911L) || \
+  (__cplusplus >= 202002 && __cpp_nontype_template_args >= 201411 && __clang_major__ >= 12)
+
+template <auto> class foo {};
+
+TEST_CASE("value can be used as non-type template parameter")
+{
+    using strong_int = strong::type<int, struct si_>;
+    [[maybe_unused]] foo<strong_int{5}> foo;
+}
+
+#endif
