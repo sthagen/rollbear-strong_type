@@ -15,6 +15,25 @@
 
 #include "catch2.hpp"
 
+#include <forward_list>
+#include <array>
+
+namespace {
+    template<typename R, typename = int>
+    struct has_size : std::false_type {
+    };
+
+    template<typename R>
+    struct has_size<R, decltype(std::declval<const R&>().size(),1)>
+    : std::true_type
+    {
+    };
+    using v = strong::type<std::vector<int>, struct v_, strong::range>;
+    static_assert(has_size<v>{}, "");
+    using f = strong::type<std::forward_list<int>, struct f_, strong::range>;
+    static_assert(!has_size<f>{}, "");
+}
+
 TEST_CASE("a range can be used with range based for")
 {
     using iv = strong::type<std::vector<int>, struct vi_, strong::range>;
@@ -54,4 +73,44 @@ TEST_CASE("iterator type can be used from range")
     {
         REQUIRE(*i == n--);
     }
+}
+
+#if __cplusplus >= 201703L
+TEST_CASE("begin() and end() are constexpr")
+{
+    using ia = strong::type
+            <
+                    std::array<int, 4>,
+                    struct ia_,
+                    strong::range,
+                    strong::default_constructible
+            >;
+    static constexpr ia a{};
+    STATIC_REQUIRE(a.end() == a.begin() + 4);
+    STATIC_REQUIRE(a.cend() == a.cbegin() + 4);
+    STATIC_REQUIRE(*a.begin() == 0);
+}
+#endif
+
+TEST_CASE("range of sized type has size")
+{
+    using iv = strong::type<std::vector<int>, struct vi_, strong::range>;
+
+    iv v{3,2,1, 0};
+    REQUIRE(v.size() == 4);
+}
+
+TEST_CASE("constexpr size")
+{
+    using ia = strong::type
+            <
+                    std::array<int, 4>,
+                    struct ia_,
+                    strong::range,
+                    strong::default_constructible
+            >;
+
+    static constexpr ia a{};
+    REQUIRE(a.size() == 4);
+    STATIC_REQUIRE(a.size() == 4);
 }

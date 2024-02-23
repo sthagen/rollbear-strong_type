@@ -33,7 +33,7 @@ template <typename T, typename Tag, typename ... M>
 class range::modifier<
     type<T, Tag, M...>,
     impl::void_t<
-        decltype(std::declval<T>().begin() == std::declval<T>().end())
+        decltype(std::declval<T&>().begin() == std::declval<T&>().end())
     >
 >
 {
@@ -44,6 +44,7 @@ public:
     using iterator = ::strong::type<r_iterator, Tag, strong::iterator>;
     using const_iterator = ::strong::type<r_const_iterator, Tag, strong::iterator>;
 
+    constexpr
     iterator
     begin()
     noexcept(noexcept(std::declval<T&>().begin()))
@@ -52,6 +53,7 @@ public:
         return iterator{value_of(self).begin()};
     }
 
+    constexpr
     iterator
     end()
     noexcept(noexcept(std::declval<T&>().end()))
@@ -60,6 +62,7 @@ public:
         return iterator{value_of(self).end()};
     }
 
+    constexpr
     const_iterator
     cbegin()
     const
@@ -69,6 +72,7 @@ public:
         return const_iterator{value_of(self).begin()};
     }
 
+    constexpr
     const_iterator
     cend()
     const
@@ -78,6 +82,7 @@ public:
         return const_iterator{value_of(self).end()};
     }
 
+    constexpr
     const_iterator
     begin()
     const
@@ -87,6 +92,7 @@ public:
         return const_iterator{value_of(self).begin()};
     }
 
+    constexpr
     const_iterator
     end()
     const
@@ -94,6 +100,17 @@ public:
     {
         auto& self = static_cast<const type&>(*this);
         return const_iterator{value_of(self).end()};
+    }
+
+    template <typename TT = const T&>
+    constexpr
+    decltype(std::declval<TT>().size())
+    size()
+    const
+    noexcept(noexcept(std::declval<TT>().size()))
+    {
+        auto& self = static_cast<const type&>(*this);
+        return value_of(self).size();
     }
 };
 
