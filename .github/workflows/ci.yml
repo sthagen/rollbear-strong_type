@@ -89,7 +89,7 @@ jobs:
 
     name: "Linux ${{matrix.config.cxx}} C++${{matrix.config.std}} ${{matrix.config.stdlib}}"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
 
       - name: "setup"
@@ -127,13 +127,14 @@ jobs:
           COV=`echo ${{matrix.config.cxx}} | grep -q clang && echo "llvm-cov gcov"|| echo gcov`
           ${COV} -abcfup `find . -name "test*.gcno"`
           ls *.gcov| grep -v 'include#strong_type'|xargs rm
+          find . -name "test*.gcno" | xargs rm
 
       - name: "upload coverage"
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
-          gcov_include: "include/strong_type"
           name: "Linux ${{matrix.config.cxx}} C++${{matrix.config.std}} ${{matrix.config.stdlib}}"
           fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
 
   build_windows:
@@ -147,7 +148,7 @@ jobs:
           - { std: 20 }
     name: "Windows C++${{matrix.config.std}}"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Configure MSVC console (Windows)
         uses: ilammy/msvc-dev-cmd@v1
