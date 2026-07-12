@@ -38,7 +38,7 @@
 namespace strong {
 struct uninitialized_t {
 };
-static constexpr uninitialized_t uninitialized{};
+constexpr uninitialized_t uninitialized{};
 
 template<typename M, typename T>
 using modifier = typename M::template modifier<T>;
@@ -51,6 +51,9 @@ struct default_constructible {
 };
 
 namespace impl {
+    template<typename ...>
+using void_t = void;
+
 template<typename T>
 constexpr bool supports_default_construction(
     const ::strong::default_constructible::modifier<T> *)
@@ -60,6 +63,20 @@ constexpr bool supports_default_construction(
 
 template<typename T, typename ... V>
 using WhenConstructible = std::enable_if_t<std::is_constructible<T, V...>::value>;
+
+
+template <typename M, typename T, typename U, typename = void>
+struct limiter
+{
+    static constexpr void limit(U&) { }
+};
+
+template <typename M, typename T, typename U>
+struct limiter<M, T, U, impl::void_t<decltype(M::template modifier<T>::limit(std::declval<U&>()))>>
+{
+    static constexpr void limit(U& u) { M::template modifier<T>::limit(u);}
+};
+
 }
 
 template<typename T, typename Tag, typename ... M>
@@ -93,6 +110,17 @@ public:
     {
     }
 
+    template <typename U>
+    static constexpr U limit(U&& u)
+    {
+        (void)std::initializer_list<int>{ (impl::limiter<M, type, U>::limit(u),1) ... };
+        return std::forward<U>(u);
+    }
+    template <typename U, typename = std::enable_if_t<std::is_constructible<T, U>::value && !std::is_same<type, std::remove_cv_t<std::remove_reference_t<U>>>::value>>
+    constexpr
+    explicit
+    type(U&& u) noexcept(std::is_nothrow_constructible<T, U>::value): _val(static_cast<T>(limit(std::forward<U>(u))))
+    {}
     template<typename ... U,
         typename = std::enable_if_t<
             std::is_constructible<T, U &&...>::value && (sizeof...(U) > 0)>>
@@ -236,22 +264,18 @@ struct require_move_assignable
 };
 
 template <typename ...>
-static constexpr bool always_false = false;
+constexpr bool always_false = false;
 
 template <bool> struct valid_type;
 template <>
 struct valid_type<true> {};
 
-template<typename ...>
-using void_t = void;
-
 
 template <typename Needle, typename Type, typename Modifier>
-static constexpr bool modifier_is
+constexpr bool modifier_is
 = std::is_base_of<modifier<Needle, Type>, modifier<Modifier,Type>>::value;
 
 template <typename Needle, typename Type, typename Haystack>
-static
 constexpr
 bool
     type_implements
@@ -264,7 +288,6 @@ template <
     typename Type,
     typename ... Ms
 >
-static
 constexpr
 bool
 modifier_is<Needle, Type, Modifier<Ms...>>
@@ -276,7 +299,6 @@ template <
     typename Type,
     typename ... Haystack
 >
-static
 constexpr
 bool type_implements<Modifier<Needles...>, Type, Modifier<Haystack...>>
 = (modifier_is<Modifier<Needles>, Type, Modifier<Haystack...>> && ...);
@@ -339,15 +361,15 @@ type_implements<Modifier<Needles...>, Type, Modifier<Haystack...>>
 #endif
 
 template <typename T, typename M>
-static constexpr bool type_is = false;
+constexpr bool type_is = false;
 
 #if __cplusplus >= 201703L
 template <typename T, typename Tag, typename ... Ms, typename M>
-static constexpr bool type_is<strong::type<T, Tag, Ms...>, M>
+constexpr bool type_is<strong::type<T, Tag, Ms...>, M>
     = (impl::type_implements<M, strong::type<T, Tag, Ms...>, Ms> || ...);
 #else
 template <typename T, typename Tag, typename ... Ms, typename M>
-static constexpr bool type_is<strong::type<T, Tag, Ms...>, M>
+constexpr bool type_is<strong::type<T, Tag, Ms...>, M>
     = impl::disjunction<std::integral_constant<bool, impl::type_implements<M, strong::type<T, Tag, Ms...>, Ms>>...>::value;
 #endif
 
@@ -359,7 +381,7 @@ using get_strong = decltype(get_strong_(static_cast<T*>(nullptr)));
 }
 
 template <typename T, typename M>
-static constexpr bool type_is_v = impl::type_is<impl::get_strong<T>, M>;
+constexpr bool type_is_v = impl::type_is<impl::get_strong<T>, M>;
 
 template <typename T, typename M>
 using type_is = std::integral_constant<bool, type_is_v<T,M>>;
